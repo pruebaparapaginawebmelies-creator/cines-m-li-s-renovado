@@ -1,4 +1,5 @@
 # Roadmap
 - [x] Precios 4,50 € / viernes +65 2 €
-- [ ] Panel privado para cartelera y sesiones
-- [ ] Guardar reservas y enviar aviso a pruebaparapaginawebmelies@gmail.com (Gmail)
+- [x] Panel privado para cartelera y sesiones (/admin)
+- [x] Guardar reservas y enviar aviso por Gmail
+- [ ] Pasar el aviso a un correo del dominio propio cuando acabe la prueba

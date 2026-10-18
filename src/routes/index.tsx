@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import hero from "@/assets/hero.jpg";
+import { createBooking, getCartelera, getTakenSeats } from "@/lib/cartelera.functions";
+import { bookingTotal, CINES, COLS, eur, isFridayInMadrid, madridDate, madridTime, PRICE, ROWS, SENIOR_PRICE, TZ } from "@/lib/cinema";
+
+const carteleraQuery = queryOptions({ queryKey: ["cartelera"], queryFn: () => getCartelera() });
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -13,49 +19,36 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  loader: ({ context }) => context.queryClient.ensureQueryData(carteleraQuery),
   component: Index,
 });
 
-const CINES = [
-  { id: "arahal", name: "Arahal", place: "Casa del Aire", addr: "C/ Veracruz 2, Arahal (Sevilla)" },
-  { id: "estepa", name: "Estepa", place: "Casa de la Cultura", addr: "Calle Saladillo 12, Estepa (Sevilla)" },
-  { id: "saucejo", name: "El Saucejo", place: "Teatro Alberquilla", addr: "C/ Alberquilla 2, El Saucejo (Sevilla)" },
-  { id: "corrales", name: "Los Corrales", place: "Casa de la Cultura", addr: "Avda. Andalucía s/n, Los Corrales (Sevilla)" },
-  { id: "osuna", name: "Osuna", place: "Conservatorio de Música", addr: "C/ Manuel Losada Villasante 23, Osuna (Sevilla)" },
-  { id: "olvera", name: "Olvera", place: "Casa de la Cultura", addr: "C/ Lepanto 2, Olvera (Cádiz)" },
-];
-
-// Películas de ejemplo: sustituir por la cartelera real
-const PELIS = [
-  { id: 1, title: "La última luz", genre: "Drama", dur: 118, age: "+12", hue: 25, times: ["17:30", "20:00", "22:15"], tag: "Estreno" },
-  { id: 2, title: "Rumbo a Marte", genre: "Ciencia ficción", dur: 132, age: "+7", hue: 220, times: ["18:00", "21:00"], tag: "Esta semana" },
-  { id: 3, title: "El pequeño zorro", genre: "Animación", dur: 94, age: "TP", hue: 60, times: ["16:30", "18:30"], tag: "Familiar" },
-  { id: 4, title: "Noche cerrada", genre: "Thriller", dur: 109, age: "+16", hue: 280, times: ["20:30", "22:45"], tag: "Seguimos" },
-];
-
-const PRICE = 4.5;
-const SENIOR_PRICE = 2; // viernes, mayores de 65
-const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
-const ROWS = "ABCDEFG".split("");
-const COLS = 10;
+type Cartelera = Awaited<ReturnType<typeof getCartelera>>;
+type Movie = Cartelera["movies"][number];
+type Show = Cartelera["showtimes"][number];
 
 function days() {
-  const f = new Intl.DateTimeFormat("es-ES", { weekday: "short", day: "numeric" });
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return { key: i, friday: d.getDay() === 5, label: i === 0 ? "Hoy" : i === 1 ? "Mañana" : f.format(d) };
+  const f = new Intl.DateTimeFormat("es-ES", { timeZone: TZ, weekday: "short", day: "numeric" });
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() + i * 86400000);
+    return { key: madridDate(d), friday: isFridayInMadrid(d), label: i === 0 ? "Hoy" : i === 1 ? "Mañana" : f.format(d) };
   });
 }
 
-type Peli = (typeof PELIS)[number];
-
 function Index() {
-  const [cine, setCine] = useState(CINES[0]!.id);
-  const [day, setDay] = useState(0);
-  const [booking, setBooking] = useState<{ peli: Peli; time: string } | null>(null);
+  const { data } = useSuspenseQuery(carteleraQuery);
+  const [cine, setCine] = useState<string>(CINES[0].id);
   const dayList = useMemo(days, []);
+  const [day, setDay] = useState(dayList[0]!.key);
+  const [booking, setBooking] = useState<{ movie: Movie; show: Show } | null>(null);
   const current = CINES.find((c) => c.id === cine)!;
+
+  const byMovie = useMemo(() => {
+    const shows = data.showtimes.filter((s) => s.cinema === cine && madridDate(new Date(s.starts_at)) === day);
+    return data.movies
+      .map((m) => ({ movie: m, shows: shows.filter((s) => s.movie_id === m.id) }))
+      .filter((x) => x.shows.length);
+  }, [data, cine, day]);
 
   return (
     <div className="min-h-screen">
@@ -109,7 +102,7 @@ function Index() {
               {dayList.map((d) => (
                 <button key={d.key} onClick={() => setDay(d.key)}
                   className={`shrink-0 rounded-lg border px-4 py-2 text-sm capitalize transition ${day === d.key ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary/60"}`}>
-                  {d.label}
+                  {d.label}{d.friday && <span className="ml-1 text-[10px] text-gold">· +65 a 2 €</span>}
                 </button>
               ))}
             </div>
@@ -117,29 +110,38 @@ function Index() {
         </div>
 
         <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-gold">Paso 3 · Elige película y sesión</p>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {PELIS.map((p) => (
-            <article key={p.id} className="overflow-hidden rounded-xl border bg-card">
-              <div className="relative flex aspect-[2/3] items-end p-4"
-                style={{ background: `linear-gradient(160deg, oklch(0.45 0.15 ${p.hue}), oklch(0.18 0.03 ${p.hue}))` }}>
-                <span className="absolute left-3 top-3 rounded-full bg-background/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">{p.tag}</span>
-                <span className="absolute right-3 top-3 rounded border border-foreground/40 px-1.5 text-[10px] font-bold">{p.age}</span>
-                <h3 className="text-2xl font-bold leading-tight">{p.title}</h3>
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-muted-foreground">{p.genre} · {p.dur} min</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {p.times.map((t) => (
-                    <button key={t} onClick={() => setBooking({ peli: p, time: t })}
-                      className="rounded-md border border-gold/40 px-3 py-1.5 text-sm font-semibold text-gold transition hover:bg-gold hover:text-accent-foreground">
-                      {t}
-                    </button>
-                  ))}
+        {byMovie.length === 0 ? (
+          <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
+            No hay sesiones programadas en Méliès {current.name} para este día. Prueba otro día u otro cine.
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {byMovie.map(({ movie: m, shows }) => (
+              <article key={m.id} className="overflow-hidden rounded-xl border bg-card">
+                <div className="relative flex aspect-[2/3] items-end bg-muted p-4">
+                  {m.poster_url ? (
+                    <img src={m.poster_url} alt={`Cartel de ${m.title}`} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : null}
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+                  {m.tag && <span className="absolute left-3 top-3 rounded-full bg-background/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">{m.tag}</span>}
+                  <span className="absolute right-3 top-3 rounded border border-foreground/40 bg-background/50 px-1.5 text-[10px] font-bold">{m.age_rating}</span>
+                  <h3 className="relative text-2xl font-bold leading-tight">{m.title}</h3>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="p-4">
+                  <p className="text-xs text-muted-foreground">{m.genre} · {m.duration_min} min</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {shows.map((s) => (
+                      <button key={s.id} onClick={() => setBooking({ movie: m, show: s })}
+                        className="rounded-md border border-gold/40 px-3 py-1.5 text-sm font-semibold text-gold transition hover:bg-gold hover:text-accent-foreground">
+                        {madridTime(new Date(s.starts_at))}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section id="cines" className="border-t bg-card/40">
@@ -168,93 +170,133 @@ function Index() {
           <div className="flex flex-col gap-1 md:items-end">
             <a href="tel:638115247" className="hover:text-foreground">638 115 247</a>
             <a href="mailto:info@cinesmelies.es" className="hover:text-foreground">info@cinesmelies.es</a>
+            <a href="/admin" className="text-xs hover:text-foreground">Acceso gestión</a>
           </div>
         </div>
       </footer>
 
       {booking && (
-        <BookingSheet peli={booking.peli} time={booking.time} cine={current.name}
-          day={dayList[day]!.label} friday={dayList[day]!.friday} onClose={() => setBooking(null)} />
+        <BookingSheet movie={booking.movie} show={booking.show} cine={current.name} onClose={() => setBooking(null)} />
       )}
     </div>
   );
 }
 
-export function bookingTotal(tickets: number, seniors: number, friday: boolean) {
-  const s = friday ? Math.min(seniors, tickets) : 0;
-  return s * SENIOR_PRICE + (tickets - s) * PRICE;
-}
-
-function BookingSheet({ peli, time, cine, day, friday, onClose }: { peli: Peli; time: string; cine: string; day: string; friday: boolean; onClose: () => void }) {
-  const taken = useMemo(() => new Set(["C4", "C5", "D5", "D6", "E2", "F8", "B7"]), []);
+function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show; cine: string; onClose: () => void }) {
+  const start = new Date(show.starts_at);
+  const friday = isFridayInMadrid(start);
+  const dayLabel = new Intl.DateTimeFormat("es-ES", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(start);
+  const fetchTaken = useServerFn(getTakenSeats);
+  const book = useServerFn(createBooking);
+  const takenQ = useQuery({ queryKey: ["taken", show.id], queryFn: () => fetchTaken({ data: { showtimeId: show.id } }) });
+  const taken = useMemo(() => new Set(takenQ.data ?? []), [takenQ.data]);
   const [sel, setSel] = useState<string[]>([]);
   const [seniors, setSeniors] = useState(0);
-  const [done, setDone] = useState(false);
+  const [step, setStep] = useState<"seats" | "details" | "done">("seats");
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const toggle = (s: string) => setSel((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]));
   const nSeniors = friday ? Math.min(seniors, sel.length) : 0;
   const total = bookingTotal(sel.length, nSeniors, friday);
 
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true); setError("");
+    try {
+      const r = await book({ data: { showtimeId: show.id, seats: sel, seniors: nSeniors, ...form } });
+      if (r.ok) setStep("done");
+      else { setError(r.error); setSel([]); setStep("seats"); takenQ.refetch(); }
+    } catch {
+      setError("No se pudo completar la reserva. Revisa tus datos e inténtalo de nuevo.");
+    } finally { setSending(false); }
+  }
+
+  const input = "w-full rounded-lg border bg-background px-3 py-2.5 text-sm outline-none focus:border-gold";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm md:items-center" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border bg-card p-6 md:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        {done ? (
+        {step === "done" ? (
           <div className="py-8 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Reserva confirmada</p>
             <h3 className="mt-3 text-3xl font-bold">¡Nos vemos en el cine!</h3>
-            <p className="mt-3 text-muted-foreground">{peli.title} · {cine} · <span className="capitalize">{day}</span> {time}<br />Butacas {sel.join(", ")}</p>
+            <p className="mt-3 text-muted-foreground">{movie.title} · {cine} · <span className="capitalize">{dayLabel}</span> {madridTime(start)}<br />Butacas {sel.join(", ")} · {eur(total)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Paga en taquilla al llegar.</p>
             <button onClick={onClose} className="mt-6 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Cerrar</button>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-bold">{peli.title}</h3>
-                <p className="text-sm text-muted-foreground">Méliès {cine} · <span className="capitalize">{day}</span> · {time}</p>
+                <h3 className="text-2xl font-bold">{movie.title}</h3>
+                <p className="text-sm text-muted-foreground">Méliès {cine} · <span className="capitalize">{dayLabel}</span> · {madridTime(start)}</p>
               </div>
               <button onClick={onClose} aria-label="Cerrar" className="text-2xl leading-none text-muted-foreground">×</button>
             </div>
-            <div className="mx-auto mt-6 h-1.5 w-3/4 rounded-full bg-gold/70" />
-            <p className="mt-1 text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Pantalla</p>
-            <div className="mt-5 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0,1fr))` }}>
-              {ROWS.flatMap((r) => Array.from({ length: COLS }, (_, i) => {
-                const id = `${r}${i + 1}`;
-                const isTaken = taken.has(id);
-                const on = sel.includes(id);
-                return (
-                  <button key={id} disabled={isTaken} onClick={() => toggle(id)} aria-label={`Butaca ${id}`}
-                    className={`aspect-square rounded-t-md text-[9px] transition ${isTaken ? "bg-muted opacity-40" : on ? "bg-primary text-primary-foreground" : "border border-foreground/25 hover:border-gold"}`}>
-                    {on ? id : ""}
-                  </button>
-                );
-              }))}
-            </div>
-            <div className="mt-4 flex justify-center gap-5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm border border-foreground/25" />Libre</span>
-              <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-primary" />Tu selección</span>
-              <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-muted" />Ocupada</span>
-            </div>
-            {friday ? (
-              <div className="mt-5 flex items-center justify-between rounded-lg border border-gold/40 p-3 text-sm">
-                <span>Mayores de 65 (viernes, {eur(SENIOR_PRICE)})</span>
-                <span className="flex items-center gap-3">
-                  <button onClick={() => setSeniors(Math.max(0, nSeniors - 1))} className="h-7 w-7 rounded-full border" aria-label="Menos">−</button>
-                  <b>{nSeniors}</b>
-                  <button onClick={() => setSeniors(Math.min(sel.length, nSeniors + 1))} className="h-7 w-7 rounded-full border" aria-label="Más">+</button>
-                </span>
-              </div>
+            {error && <p className="mt-4 rounded-lg border border-primary/50 bg-primary/10 p-3 text-sm">{error}</p>}
+
+            {step === "seats" ? (
+              <>
+                <div className="mx-auto mt-6 h-1.5 w-3/4 rounded-full bg-gold/70" />
+                <p className="mt-1 text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Pantalla</p>
+                <div className={`mt-5 grid gap-1.5 ${takenQ.isLoading ? "opacity-40" : ""}`} style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0,1fr))` }}>
+                  {ROWS.flatMap((r) => Array.from({ length: COLS }, (_, i) => {
+                    const id = `${r}${i + 1}`;
+                    const isTaken = taken.has(id);
+                    const on = sel.includes(id);
+                    return (
+                      <button key={id} disabled={isTaken || takenQ.isLoading} onClick={() => toggle(id)} aria-label={`Butaca ${id}`}
+                        className={`aspect-square rounded-t-md text-[9px] transition ${isTaken ? "bg-muted opacity-40" : on ? "bg-primary text-primary-foreground" : "border border-foreground/25 hover:border-gold"}`}>
+                        {on ? id : ""}
+                      </button>
+                    );
+                  }))}
+                </div>
+                <div className="mt-4 flex justify-center gap-5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm border border-foreground/25" />Libre</span>
+                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-primary" />Tu selección</span>
+                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-muted" />Ocupada</span>
+                </div>
+                {friday ? (
+                  <div className="mt-5 flex items-center justify-between rounded-lg border border-gold/40 p-3 text-sm">
+                    <span>Mayores de 65 (viernes, {eur(SENIOR_PRICE)})</span>
+                    <span className="flex items-center gap-3">
+                      <button onClick={() => setSeniors(Math.max(0, nSeniors - 1))} className="h-7 w-7 rounded-full border" aria-label="Menos">−</button>
+                      <b>{nSeniors}</b>
+                      <button onClick={() => setSeniors(Math.min(sel.length, nSeniors + 1))} className="h-7 w-7 rounded-full border" aria-label="Más">+</button>
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-5 text-center text-xs text-muted-foreground">Entrada general {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>
+                )}
+              </>
             ) : (
-              <p className="mt-5 text-center text-xs text-muted-foreground">Entrada general {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>
+              <form id="booking-form" onSubmit={submit} className="mt-6 space-y-3">
+                <p className="text-sm text-muted-foreground">Butacas {sel.join(", ")}</p>
+                <input required minLength={2} placeholder="Nombre y apellidos" className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input required type="email" placeholder="Correo electrónico" className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <input type="tel" placeholder="Teléfono (opcional)" className={input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <button type="button" onClick={() => setStep("seats")} className="text-sm text-muted-foreground underline">← Cambiar butacas</button>
+              </form>
             )}
+
             <div className="mt-6 flex items-center justify-between border-t pt-5">
               <div>
                 <p className="text-sm text-muted-foreground">{sel.length} entrada{sel.length === 1 ? "" : "s"}</p>
                 <p className="font-display text-2xl font-bold">{eur(total)}</p>
               </div>
-              <button disabled={!sel.length} onClick={() => setDone(true)}
-                className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none">
-                Confirmar reserva
-              </button>
+              {step === "seats" ? (
+                <button disabled={!sel.length} onClick={() => setStep("details")}
+                  className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none">
+                  Continuar
+                </button>
+              ) : (
+                <button type="submit" form="booking-form" disabled={sending}
+                  className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40">
+                  {sending ? "Reservando…" : "Confirmar reserva"}
+                </button>
+              )}
             </div>
           </>
         )}

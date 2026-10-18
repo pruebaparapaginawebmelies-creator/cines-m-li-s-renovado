@@ -14,16 +14,148 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          id: string
+          seats: string[]
+          seniors: number
+          showtime_id: string
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          customer_email: string
+          customer_name: string
+          customer_phone?: string
+          id?: string
+          seats: string[]
+          seniors?: number
+          showtime_id: string
+          total: number
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string
+          id?: string
+          seats?: string[]
+          seniors?: number
+          showtime_id?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_showtime_id_fkey"
+            columns: ["showtime_id"]
+            isOneToOne: false
+            referencedRelation: "showtimes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movies: {
+        Row: {
+          age_rating: string
+          created_at: string
+          duration_min: number
+          genre: string
+          id: string
+          poster_url: string | null
+          tag: string
+          title: string
+        }
+        Insert: {
+          age_rating?: string
+          created_at?: string
+          duration_min?: number
+          genre?: string
+          id?: string
+          poster_url?: string | null
+          tag?: string
+          title: string
+        }
+        Update: {
+          age_rating?: string
+          created_at?: string
+          duration_min?: number
+          genre?: string
+          id?: string
+          poster_url?: string | null
+          tag?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      showtimes: {
+        Row: {
+          cinema: string
+          created_at: string
+          id: string
+          movie_id: string
+          starts_at: string
+        }
+        Insert: {
+          cinema: string
+          created_at?: string
+          id?: string
+          movie_id: string
+          starts_at: string
+        }
+        Update: {
+          cinema?: string
+          created_at?: string
+          id?: string
+          movie_id?: string
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "showtimes_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: false
+            referencedRelation: "movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +282,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin"],
+    },
   },
 } as const
