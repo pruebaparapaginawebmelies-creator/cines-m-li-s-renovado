@@ -234,10 +234,22 @@ function BookingSheet({ peli, time, cine, day, friday, onClose }: { peli: Peli; 
               <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-primary" />Tu selección</span>
               <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-muted" />Ocupada</span>
             </div>
+            {friday ? (
+              <div className="mt-5 flex items-center justify-between rounded-lg border border-gold/40 p-3 text-sm">
+                <span>Mayores de 65 (viernes, {eur(SENIOR_PRICE)})</span>
+                <span className="flex items-center gap-3">
+                  <button onClick={() => setSeniors(Math.max(0, nSeniors - 1))} className="h-7 w-7 rounded-full border" aria-label="Menos">−</button>
+                  <b>{nSeniors}</b>
+                  <button onClick={() => setSeniors(Math.min(sel.length, nSeniors + 1))} className="h-7 w-7 rounded-full border" aria-label="Más">+</button>
+                </span>
+              </div>
+            ) : (
+              <p className="mt-5 text-center text-xs text-muted-foreground">Entrada general {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>
+            )}
             <div className="mt-6 flex items-center justify-between border-t pt-5">
               <div>
                 <p className="text-sm text-muted-foreground">{sel.length} entrada{sel.length === 1 ? "" : "s"}</p>
-                <p className="font-display text-2xl font-bold">{sel.length * PRICE} €</p>
+                <p className="font-display text-2xl font-bold">{eur(total)}</p>
               </div>
               <button disabled={!sel.length} onClick={() => setDone(true)}
                 className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none">
