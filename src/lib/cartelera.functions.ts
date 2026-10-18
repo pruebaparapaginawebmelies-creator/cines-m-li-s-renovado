@@ -73,13 +73,38 @@ export const createBooking = createServerFn({ method: "POST" })
           `Fecha: ${madridDate(start)} a las ${madridTime(start)}`,
           `A cobrar en taquilla: ${eur(total)}`,
           ``,
-          `Referencia: ${booking.id}`,
+          `Email cliente: ${data.email}`,
+          `Código: ${code}`,
         ].join("\n"),
       );
     } catch (e) {
       console.error("No se pudo enviar el aviso de reserva", e);
     }
-    return { ok: true as const, id: booking.id, total };
+    try {
+      await sendGmail(
+        data.email,
+        `Tu reserva en Méliès ${cineName(show.cinema)} · ${title} · Código ${code}`,
+        [
+          `Hola ${data.name},`,
+          ``,
+          `Tu reserva está confirmada. Enseña este correo en taquilla al llegar: tendrás prioridad de acceso.`,
+          ``,
+          `CÓDIGO DE RESERVA: ${code}`,
+          ``,
+          `Película: ${title}`,
+          `Cine: Méliès ${cineName(show.cinema)}`,
+          `Fecha: ${madridDate(start)} a las ${madridTime(start)}`,
+          `Plazas: ${data.tickets}${seniors ? ` (${seniors} mayores de 65)` : ""}`,
+          `A pagar en taquilla: ${eur(total)}`,
+          ``,
+          `¡Nos vemos en el cine!`,
+          `Méliès Cines · 638 115 247`,
+        ].join("\n"),
+      );
+    } catch (e) {
+      console.error("No se pudo enviar la confirmación al cliente", e);
+    }
+    return { ok: true as const, id: booking.id, code, total };
   });
 
 async function sendGmail(to: string, subject: string, body: string) {
