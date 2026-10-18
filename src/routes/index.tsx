@@ -33,7 +33,9 @@ const PELIS = [
   { id: 4, title: "Noche cerrada", genre: "Thriller", dur: 109, age: "+16", hue: 280, times: ["20:30", "22:45"], tag: "Seguimos" },
 ];
 
-const PRICE = 5;
+const PRICE = 4.5;
+const SENIOR_PRICE = 2; // viernes, mayores de 65
+const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 const ROWS = "ABCDEFG".split("");
 const COLS = 10;
 
@@ -42,7 +44,7 @@ function days() {
   return Array.from({ length: 5 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
-    return { key: i, label: i === 0 ? "Hoy" : i === 1 ? "Mañana" : f.format(d) };
+    return { key: i, friday: d.getDay() === 5, label: i === 0 ? "Hoy" : i === 1 ? "Mañana" : f.format(d) };
   });
 }
 
@@ -82,7 +84,7 @@ function Index() {
           <p className="mt-5 max-w-lg text-muted-foreground">Seis salas en Sevilla y Cádiz. Elige tu cine, tu película y tu butaca en menos de un minuto.</p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a href="#cartelera" className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow">Ver cartelera</a>
-            <span className="text-sm text-muted-foreground">Entradas desde <b className="text-foreground">{PRICE} €</b></span>
+            <span className="text-sm text-muted-foreground">Entradas a <b className="text-foreground">{eur(PRICE)}</b> · Viernes mayores de 65: <b className="text-gold">{eur(SENIOR_PRICE)}</b></span>
           </div>
         </div>
       </section>
@@ -172,17 +174,26 @@ function Index() {
 
       {booking && (
         <BookingSheet peli={booking.peli} time={booking.time} cine={current.name}
-          day={dayList[day]!.label} onClose={() => setBooking(null)} />
+          day={dayList[day]!.label} friday={dayList[day]!.friday} onClose={() => setBooking(null)} />
       )}
     </div>
   );
 }
 
-function BookingSheet({ peli, time, cine, day, onClose }: { peli: Peli; time: string; cine: string; day: string; onClose: () => void }) {
+export function bookingTotal(tickets: number, seniors: number, friday: boolean) {
+  const s = friday ? Math.min(seniors, tickets) : 0;
+  return s * SENIOR_PRICE + (tickets - s) * PRICE;
+}
+
+function BookingSheet({ peli, time, cine, day, friday, onClose }: { peli: Peli; time: string; cine: string; day: string; friday: boolean; onClose: () => void }) {
   const taken = useMemo(() => new Set(["C4", "C5", "D5", "D6", "E2", "F8", "B7"]), []);
   const [sel, setSel] = useState<string[]>([]);
+  const [seniors, setSeniors] = useState(0);
   const [done, setDone] = useState(false);
   const toggle = (s: string) => setSel((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]));
+  const nSeniors = friday ? Math.min(seniors, sel.length) : 0;
+  const total = bookingTotal(sel.length, nSeniors, friday);
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm md:items-center" onClick={onClose}>
@@ -223,10 +234,22 @@ function BookingSheet({ peli, time, cine, day, onClose }: { peli: Peli; time: st
               <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-primary" />Tu selección</span>
               <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-muted" />Ocupada</span>
             </div>
+            {friday ? (
+              <div className="mt-5 flex items-center justify-between rounded-lg border border-gold/40 p-3 text-sm">
+                <span>Mayores de 65 (viernes, {eur(SENIOR_PRICE)})</span>
+                <span className="flex items-center gap-3">
+                  <button onClick={() => setSeniors(Math.max(0, nSeniors - 1))} className="h-7 w-7 rounded-full border" aria-label="Menos">−</button>
+                  <b>{nSeniors}</b>
+                  <button onClick={() => setSeniors(Math.min(sel.length, nSeniors + 1))} className="h-7 w-7 rounded-full border" aria-label="Más">+</button>
+                </span>
+              </div>
+            ) : (
+              <p className="mt-5 text-center text-xs text-muted-foreground">Entrada general {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>
+            )}
             <div className="mt-6 flex items-center justify-between border-t pt-5">
               <div>
                 <p className="text-sm text-muted-foreground">{sel.length} entrada{sel.length === 1 ? "" : "s"}</p>
-                <p className="font-display text-2xl font-bold">{sel.length * PRICE} €</p>
+                <p className="font-display text-2xl font-bold">{eur(total)}</p>
               </div>
               <button disabled={!sel.length} onClick={() => setDone(true)}
                 className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none">
