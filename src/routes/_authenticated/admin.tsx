@@ -201,9 +201,9 @@ function Bookings() {
         const d = s ? new Date(s.starts_at) : null;
         return (
           <div key={b.id} className="rounded-xl border bg-card p-4 text-sm">
-            <div className="flex justify-between"><b>{s?.movies?.title}</b><span className="text-gold">{eur(Number(b.total))}</span></div>
-            <p className="text-muted-foreground">{s && cineName(s.cinema)} · {d && `${madridDate(d)} ${madridTime(d)}`} · Butacas {b.seats.join(", ")}{b.seniors ? ` (${b.seniors} +65)` : ""}</p>
-            <p>{b.customer_name} · {b.customer_email} {b.customer_phone && `· ${b.customer_phone}`}</p>
+            <div className="flex justify-between"><b>{b.customer_name}</b><span className="text-gold">{eur(Number(b.total))}</span></div>
+            <p>{b.tickets || b.seats.length} plaza{(b.tickets || b.seats.length) === 1 ? "" : "s"}{b.seniors ? ` (${b.seniors} +65)` : ""} · {s?.movies?.title}</p>
+            <p className="text-muted-foreground">{s && cineName(s.cinema)} · {d && `${madridDate(d)} ${madridTime(d)}`}</p>
           </div>
         );
       })}

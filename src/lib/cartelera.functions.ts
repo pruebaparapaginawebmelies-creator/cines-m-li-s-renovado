@@ -33,26 +33,13 @@ export const getCartelera = createServerFn({ method: "GET" }).handler(async () =
   return { movies: movies.data, showtimes: shows.data };
 });
 
-export const getTakenSeats = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ showtimeId: z.string().uuid() }).parse(d))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: rows, error } = await supabaseAdmin.from("bookings").select("seats").eq("showtime_id", data.showtimeId);
-    if (error) throw new Error(error.message);
-    return rows.flatMap((r) => r.seats);
-  });
-
-const VALID_SEATS = new Set(ROWS.flatMap((r) => Array.from({ length: COLS }, (_, i) => `${r}${i + 1}`)));
-
 export const createBooking = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({
       showtimeId: z.string().uuid(),
-      seats: z.array(z.string()).min(1).max(20).refine((s) => s.every((x) => VALID_SEATS.has(x)) && new Set(s).size === s.length),
+      tickets: z.number().int().min(1).max(20),
       seniors: z.number().int().min(0).max(20),
-      name: z.string().trim().min(2).max(100),
-      email: z.string().trim().email().max(200),
-      phone: z.string().trim().max(30).default(""),
+      name: z.string().trim().min(3).max(100),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -63,17 +50,12 @@ export const createBooking = createServerFn({ method: "POST" })
 
     const start = new Date(show.starts_at);
     const friday = isFridayInMadrid(start);
-    const seniors = friday ? Math.min(data.seniors, data.seats.length) : 0;
-    const total = bookingTotal(data.seats.length, seniors, friday);
-
-    const { data: existing } = await supabaseAdmin.from("bookings").select("seats").eq("showtime_id", show.id);
-    const taken = new Set((existing ?? []).flatMap((r) => r.seats));
-    const clash = data.seats.filter((s) => taken.has(s));
-    if (clash.length) return { ok: false as const, error: `Las butacas ${clash.join(", ")} acaban de ocuparse. Elige otras.` };
+    const seniors = friday ? Math.min(data.seniors, data.tickets) : 0;
+    const total = bookingTotal(data.tickets, seniors, friday);
 
     const { data: booking, error } = await supabaseAdmin.from("bookings").insert({
-      showtime_id: show.id, seats: data.seats, seniors, total,
-      customer_name: data.name, customer_email: data.email, customer_phone: data.phone,
+      showtime_id: show.id, seats: [], tickets: data.tickets, seniors, total,
+      customer_name: data.name,
     }).select("id").single();
     if (error) throw new Error(error.message);
 
@@ -81,27 +63,48 @@ export const createBooking = createServerFn({ method: "POST" })
     try {
       await sendGmail(
         NOTIFY_TO,
-        `Nueva reserva: ${title} · ${cineName(show.cinema)} ${madridDate(start)} ${madridTime(start)}`,
+        `Nueva reserva: ${data.name} · ${data.tickets} plaza${data.tickets === 1 ? "" : "s"} · ${title} · ${cineName(show.cinema)} ${madridDate(start)} ${madridTime(start)}`,
         [
           `Nueva reserva en Méliès ${cineName(show.cinema)}`,
           ``,
+          `Nombre: ${data.name}`,
+          `Plazas: ${data.tickets}${seniors ? ` (${seniors} mayores de 65)` : ""}`,
           `Película: ${title}`,
           `Fecha: ${madridDate(start)} a las ${madridTime(start)}`,
-          `Butacas: ${data.seats.join(", ")}`,
-          `Entradas: ${data.seats.length}${seniors ? ` (${seniors} mayores de 65)` : ""}`,
-          `Total: ${eur(total)}`,
+          `A cobrar en taquilla: ${eur(total)}`,
           ``,
-          `Nombre: ${data.name}`,
-          `Email: ${data.email}`,
-          `Teléfono: ${data.phone || "-"}`,
-          ``,
-          `Referencia: ${booking.id}`,
+          `Email cliente: ${data.email}`,
+          `Código: ${code}`,
         ].join("\n"),
       );
     } catch (e) {
       console.error("No se pudo enviar el aviso de reserva", e);
     }
-    return { ok: true as const, id: booking.id, total };
+    try {
+      await sendGmail(
+        data.email,
+        `Tu reserva en Méliès ${cineName(show.cinema)} · ${title} · Código ${code}`,
+        [
+          `Hola ${data.name},`,
+          ``,
+          `Tu reserva está confirmada. Enseña este correo en taquilla al llegar: tendrás prioridad de acceso.`,
+          ``,
+          `CÓDIGO DE RESERVA: ${code}`,
+          ``,
+          `Película: ${title}`,
+          `Cine: Méliès ${cineName(show.cinema)}`,
+          `Fecha: ${madridDate(start)} a las ${madridTime(start)}`,
+          `Plazas: ${data.tickets}${seniors ? ` (${seniors} mayores de 65)` : ""}`,
+          `A pagar en taquilla: ${eur(total)}`,
+          ``,
+          `¡Nos vemos en el cine!`,
+          `Méliès Cines · 638 115 247`,
+        ].join("\n"),
+      );
+    } catch (e) {
+      console.error("No se pudo enviar la confirmación al cliente", e);
+    }
+    return { ok: true as const, id: booking.id, code, total };
   });
 
 async function sendGmail(to: string, subject: string, body: string) {
