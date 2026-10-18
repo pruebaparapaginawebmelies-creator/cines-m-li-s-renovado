@@ -27,7 +27,7 @@ function madridToIso(date: string, time: string) {
   const guess = new Date(`${date}T${time}:00Z`);
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
     .formatToParts(guess).reduce<Record<string, string>>((a, p) => ({ ...a, [p.type]: p.value }), {});
-  const asMadrid = Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!, +parts.hour!, +parts.minute!);
+  const asMadrid = Date.UTC(+parts["year"]!, +parts["month"]! - 1, +parts["day"]!, +parts["hour"]!, +parts["minute"]!);
   return new Date(guess.getTime() - (asMadrid - guess.getTime())).toISOString();
 }
 
