@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import hero from "@/assets/hero.jpg";
-import { createBooking, getCartelera, getTakenSeats } from "@/lib/cartelera.functions";
-import { bookingTotal, CINES, COLS, eur, isFridayInMadrid, madridDate, madridTime, PRICE, ROWS, SENIOR_PRICE, TZ } from "@/lib/cinema";
+import { createBooking, getCartelera } from "@/lib/cartelera.functions";
+import { bookingTotal, CINES, eur, isFridayInMadrid, madridDate, madridTime, PRICE, SENIOR_PRICE, TZ } from "@/lib/cinema";
 
 const carteleraQuery = queryOptions({ queryKey: ["cartelera"], queryFn: () => getCartelera() });
 
@@ -186,119 +186,80 @@ function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show
   const start = new Date(show.starts_at);
   const friday = isFridayInMadrid(start);
   const dayLabel = new Intl.DateTimeFormat("es-ES", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(start);
-  const fetchTaken = useServerFn(getTakenSeats);
   const book = useServerFn(createBooking);
-  const takenQ = useQuery({ queryKey: ["taken", show.id], queryFn: () => fetchTaken({ data: { showtimeId: show.id } }) });
-  const taken = useMemo(() => new Set(takenQ.data ?? []), [takenQ.data]);
-  const [sel, setSel] = useState<string[]>([]);
+  const [tickets, setTickets] = useState(1);
   const [seniors, setSeniors] = useState(0);
-  const [step, setStep] = useState<"seats" | "details" | "done">("seats");
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [name, setName] = useState("");
+  const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const toggle = (s: string) => setSel((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]));
-  const nSeniors = friday ? Math.min(seniors, sel.length) : 0;
-  const total = bookingTotal(sel.length, nSeniors, friday);
+  const nSeniors = friday ? Math.min(seniors, tickets) : 0;
+  const total = bookingTotal(tickets, nSeniors, friday);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSending(true); setError("");
     try {
-      const r = await book({ data: { showtimeId: show.id, seats: sel, seniors: nSeniors, ...form } });
-      if (r.ok) setStep("done");
-      else { setError(r.error); setSel([]); setStep("seats"); takenQ.refetch(); }
+      const r = await book({ data: { showtimeId: show.id, tickets, seniors: nSeniors, name } });
+      if (r.ok) setDone(true); else setError(r.error);
     } catch {
-      setError("No se pudo completar la reserva. Revisa tus datos e inténtalo de nuevo.");
+      setError("No se pudo completar la reserva. Inténtalo de nuevo.");
     } finally { setSending(false); }
   }
 
-  const input = "w-full rounded-lg border bg-background px-3 py-2.5 text-sm outline-none focus:border-gold";
+  const Stepper = ({ value, set, min, max, label }: { value: number; set: (n: number) => void; min: number; max: number; label: string }) => (
+    <div className="flex items-center justify-between rounded-lg border p-3 text-sm">
+      <span>{label}</span>
+      <span className="flex items-center gap-4">
+        <button type="button" onClick={() => set(Math.max(min, value - 1))} className="h-9 w-9 rounded-full border text-lg" aria-label={`Menos ${label}`}>−</button>
+        <b className="w-5 text-center text-lg">{value}</b>
+        <button type="button" onClick={() => set(Math.min(max, value + 1))} className="h-9 w-9 rounded-full border text-lg" aria-label={`Más ${label}`}>+</button>
+      </span>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm md:items-center" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border bg-card p-6 md:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        {step === "done" ? (
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border bg-card p-6 md:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        {done ? (
           <div className="py-8 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Reserva confirmada</p>
             <h3 className="mt-3 text-3xl font-bold">¡Nos vemos en el cine!</h3>
-            <p className="mt-3 text-muted-foreground">{movie.title} · {cine} · <span className="capitalize">{dayLabel}</span> {madridTime(start)}<br />Butacas {sel.join(", ")} · {eur(total)}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Paga en taquilla al llegar.</p>
+            <p className="mt-3 text-muted-foreground">{movie.title} · {cine} · <span className="capitalize">{dayLabel}</span> {madridTime(start)}</p>
+            <p className="mt-1 text-muted-foreground">{tickets} plaza{tickets === 1 ? "" : "s"} a nombre de <b className="text-foreground">{name}</b></p>
+            <p className="mt-4 rounded-lg border border-gold/40 p-3 text-sm">Di tu nombre en taquilla: tendrás <b>prioridad de acceso</b> y pagarás allí <b>{eur(total)}</b>.</p>
             <button onClick={onClose} className="mt-6 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Cerrar</button>
           </div>
         ) : (
-          <>
+          <form onSubmit={submit}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-2xl font-bold">{movie.title}</h3>
                 <p className="text-sm text-muted-foreground">Méliès {cine} · <span className="capitalize">{dayLabel}</span> · {madridTime(start)}</p>
               </div>
-              <button onClick={onClose} aria-label="Cerrar" className="text-2xl leading-none text-muted-foreground">×</button>
+              <button type="button" onClick={onClose} aria-label="Cerrar" className="text-2xl leading-none text-muted-foreground">×</button>
             </div>
+            <p className="mt-4 text-sm text-muted-foreground">Reserva tu plaza con prioridad de acceso. Se paga en taquilla.</p>
             {error && <p className="mt-4 rounded-lg border border-primary/50 bg-primary/10 p-3 text-sm">{error}</p>}
-
-            {step === "seats" ? (
-              <>
-                <div className="mx-auto mt-6 h-1.5 w-3/4 rounded-full bg-gold/70" />
-                <p className="mt-1 text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Pantalla</p>
-                <div className={`mt-5 grid gap-1.5 ${takenQ.isLoading ? "opacity-40" : ""}`} style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0,1fr))` }}>
-                  {ROWS.flatMap((r) => Array.from({ length: COLS }, (_, i) => {
-                    const id = `${r}${i + 1}`;
-                    const isTaken = taken.has(id);
-                    const on = sel.includes(id);
-                    return (
-                      <button key={id} disabled={isTaken || takenQ.isLoading} onClick={() => toggle(id)} aria-label={`Butaca ${id}`}
-                        className={`aspect-square rounded-t-md text-[9px] transition ${isTaken ? "bg-muted opacity-40" : on ? "bg-primary text-primary-foreground" : "border border-foreground/25 hover:border-gold"}`}>
-                        {on ? id : ""}
-                      </button>
-                    );
-                  }))}
-                </div>
-                <div className="mt-4 flex justify-center gap-5 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm border border-foreground/25" />Libre</span>
-                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-primary" />Tu selección</span>
-                  <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-sm bg-muted" />Ocupada</span>
-                </div>
-                {friday ? (
-                  <div className="mt-5 flex items-center justify-between rounded-lg border border-gold/40 p-3 text-sm">
-                    <span>Mayores de 65 (viernes, {eur(SENIOR_PRICE)})</span>
-                    <span className="flex items-center gap-3">
-                      <button onClick={() => setSeniors(Math.max(0, nSeniors - 1))} className="h-7 w-7 rounded-full border" aria-label="Menos">−</button>
-                      <b>{nSeniors}</b>
-                      <button onClick={() => setSeniors(Math.min(sel.length, nSeniors + 1))} className="h-7 w-7 rounded-full border" aria-label="Más">+</button>
-                    </span>
-                  </div>
-                ) : (
-                  <p className="mt-5 text-center text-xs text-muted-foreground">Entrada general {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>
-                )}
-              </>
-            ) : (
-              <form id="booking-form" onSubmit={submit} className="mt-6 space-y-3">
-                <p className="text-sm text-muted-foreground">Butacas {sel.join(", ")}</p>
-                <input required minLength={2} placeholder="Nombre y apellidos" className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                <input required type="email" placeholder="Correo electrónico" className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                <input type="tel" placeholder="Teléfono (opcional)" className={input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                <button type="button" onClick={() => setStep("seats")} className="text-sm text-muted-foreground underline">← Cambiar butacas</button>
-              </form>
-            )}
-
+            <div className="mt-5 space-y-3">
+              <input required minLength={3} placeholder="Nombre completo" autoComplete="name"
+                className="w-full rounded-lg border bg-background px-3 py-3 text-sm outline-none focus:border-gold"
+                value={name} onChange={(e) => setName(e.target.value)} />
+              <Stepper label="Plazas" value={tickets} set={setTickets} min={1} max={20} />
+              {friday && <Stepper label={`De ellas, mayores de 65 (${eur(SENIOR_PRICE)})`} value={nSeniors} set={setSeniors} min={0} max={tickets} />}
+              {!friday && <p className="text-center text-xs text-muted-foreground">Entrada {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>}
+            </div>
             <div className="mt-6 flex items-center justify-between border-t pt-5">
               <div>
-                <p className="text-sm text-muted-foreground">{sel.length} entrada{sel.length === 1 ? "" : "s"}</p>
+                <p className="text-sm text-muted-foreground">A pagar en taquilla</p>
                 <p className="font-display text-2xl font-bold">{eur(total)}</p>
               </div>
-              {step === "seats" ? (
-                <button disabled={!sel.length} onClick={() => setStep("details")}
-                  className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none">
-                  Continuar
-                </button>
-              ) : (
-                <button type="submit" form="booking-form" disabled={sending}
-                  className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40">
-                  {sending ? "Reservando…" : "Confirmar reserva"}
-                </button>
-              )}
+              <button type="submit" disabled={sending}
+                className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-40">
+                {sending ? "Reservando…" : "Reservar"}
+              </button>
             </div>
-          </>
+          </form>
         )}
       </div>
     </div>
