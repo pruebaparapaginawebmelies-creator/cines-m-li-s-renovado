@@ -24,17 +24,19 @@ export type Database = {
           seats: string[]
           seniors: number
           showtime_id: string
+          tickets: number
           total: number
         }
         Insert: {
           created_at?: string
-          customer_email: string
+          customer_email?: string
           customer_name: string
           customer_phone?: string
           id?: string
           seats: string[]
           seniors?: number
           showtime_id: string
+          tickets?: number
           total: number
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           seats?: string[]
           seniors?: number
           showtime_id?: string
+          tickets?: number
           total?: number
         }
         Relationships: [
