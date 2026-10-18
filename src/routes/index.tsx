@@ -49,7 +49,7 @@ function days() {
 type Peli = (typeof PELIS)[number];
 
 function Index() {
-  const [cine, setCine] = useState(CINES[0].id);
+  const [cine, setCine] = useState(CINES[0]!.id);
   const [day, setDay] = useState(0);
   const [booking, setBooking] = useState<{ peli: Peli; time: string } | null>(null);
   const dayList = useMemo(days, []);
@@ -172,7 +172,7 @@ function Index() {
 
       {booking && (
         <BookingSheet peli={booking.peli} time={booking.time} cine={current.name}
-          day={dayList[day].label} onClose={() => setBooking(null)} />
+          day={dayList[day]!.label} onClose={() => setBooking(null)} />
       )}
     </div>
   );
