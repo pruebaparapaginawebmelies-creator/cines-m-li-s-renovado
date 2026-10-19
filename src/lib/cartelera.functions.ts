@@ -65,8 +65,10 @@ export const createBooking = createServerFn({ method: "POST" })
     try {
       await sendGmail(
         NOTIFY_TO,
-        `Nueva reserva: ${data.name} · ${data.tickets} plaza${data.tickets === 1 ? "" : "s"} · ${title} · ${cineName(show.cinema)} ${madridDate(start)} ${madridTime(start)}`,
+        cineName(show.cinema),
         [
+          `${data.name} - ${data.tickets} plaza${data.tickets === 1 ? "" : "s"} - ${data.email}`,
+          ``,
           `Nueva reserva en Méliès ${cineName(show.cinema)}`,
           ``,
           `Nombre: ${data.name}`,
