@@ -79,6 +79,24 @@ function Admin() {
 
 type MovieRow = { id: string; title: string; genre: string; duration_min: number; age_rating: string; tag: string; poster_url: string | null };
 
+/** Reduce el cartel a máx. 600px de ancho y lo guarda como imagen ligera. */
+function shrinkImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 600 / img.width);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL("image/webp", 0.85));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 function Movies({ movies, refresh }: { movies: MovieRow[]; refresh: () => void }) {
   const empty = { title: "", genre: "", duration_min: 100, age_rating: "TP", tag: "", poster_url: "" };
   const [f, setF] = useState(empty);
@@ -107,7 +125,13 @@ function Movies({ movies, refresh }: { movies: MovieRow[]; refresh: () => void }
           </select>
         </div>
         <input placeholder="Etiqueta (Estreno, Familiar…)" className={input} value={f.tag} onChange={(e) => setF({ ...f, tag: e.target.value })} />
-        <input type="url" placeholder="Enlace a la imagen del cartel" className={input} value={f.poster_url} onChange={(e) => setF({ ...f, poster_url: e.target.value })} />
+        <label className="block text-xs text-muted-foreground">Imagen del cartel (PNG o JPG)
+          <input type="file" accept="image/png,image/jpeg,image/webp" className={input} onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) setF({ ...f, poster_url: await shrinkImage(file) });
+          }} />
+        </label>
+        {f.poster_url && <img src={f.poster_url} alt="Vista previa del cartel" className="h-32 rounded object-cover" />}
         <button disabled={busy} className={btn}>Guardar</button>
       </form>
       <div className="space-y-2">
