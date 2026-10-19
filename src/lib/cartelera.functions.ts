@@ -40,6 +40,7 @@ export const createBooking = createServerFn({ method: "POST" })
       tickets: z.number().int().min(1).max(20),
       seniors: z.number().int().min(0).max(20),
       name: z.string().trim().min(3).max(100),
+      email: z.string().trim().email().max(200),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -55,7 +56,7 @@ export const createBooking = createServerFn({ method: "POST" })
 
     const { data: booking, error } = await supabaseAdmin.from("bookings").insert({
       showtime_id: show.id, seats: [], tickets: data.tickets, seniors, total,
-      customer_name: data.name,
+      customer_name: data.name, customer_email: data.email,
     }).select("id").single();
     if (error) throw new Error(error.message);
 

@@ -190,6 +190,8 @@ function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show
   const [tickets, setTickets] = useState(1);
   const [seniors, setSeniors] = useState(0);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -200,8 +202,8 @@ function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show
     e.preventDefault();
     setSending(true); setError("");
     try {
-      const r = await book({ data: { showtimeId: show.id, tickets, seniors: nSeniors, name } });
-      if (r.ok) setDone(true); else setError(r.error);
+      const r = await book({ data: { showtimeId: show.id, tickets, seniors: nSeniors, name, email } });
+      if (r.ok) { setCode(r.code); setDone(true); } else setError(r.error);
     } catch {
       setError("No se pudo completar la reserva. Inténtalo de nuevo.");
     } finally { setSending(false); }
@@ -227,7 +229,9 @@ function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show
             <h3 className="mt-3 text-3xl font-bold">¡Nos vemos en el cine!</h3>
             <p className="mt-3 text-muted-foreground">{movie.title} · {cine} · <span className="capitalize">{dayLabel}</span> {madridTime(start)}</p>
             <p className="mt-1 text-muted-foreground">{tickets} plaza{tickets === 1 ? "" : "s"} a nombre de <b className="text-foreground">{name}</b></p>
-            <p className="mt-4 rounded-lg border border-gold/40 p-3 text-sm">Di tu nombre en taquilla: tendrás <b>prioridad de acceso</b> y pagarás allí <b>{eur(total)}</b>.</p>
+            <p className="mt-4 font-display text-3xl font-bold tracking-widest text-gold">{code}</p>
+            <p className="text-xs text-muted-foreground">Te hemos enviado la confirmación a {email}</p>
+            <p className="mt-4 rounded-lg border border-gold/40 p-3 text-sm">Enseña el correo o di tu nombre en taquilla: tendrás <b>prioridad de acceso</b> y pagarás allí <b>{eur(total)}</b>.</p>
             <button onClick={onClose} className="mt-6 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground">Cerrar</button>
           </div>
         ) : (
@@ -245,6 +249,9 @@ function BookingSheet({ movie, show, cine, onClose }: { movie: Movie; show: Show
               <input required minLength={3} placeholder="Nombre completo" autoComplete="name"
                 className="w-full rounded-lg border bg-background px-3 py-3 text-sm outline-none focus:border-gold"
                 value={name} onChange={(e) => setName(e.target.value)} />
+              <input required type="email" placeholder="Correo electrónico (te enviamos la confirmación)" autoComplete="email"
+                className="w-full rounded-lg border bg-background px-3 py-3 text-sm outline-none focus:border-gold"
+                value={email} onChange={(e) => setEmail(e.target.value)} />
               <Stepper label="Plazas" value={tickets} set={setTickets} min={1} max={20} />
               {friday && <Stepper label={`De ellas, mayores de 65 (${eur(SENIOR_PRICE)})`} value={nSeniors} set={setSeniors} min={0} max={tickets} />}
               {!friday && <p className="text-center text-xs text-muted-foreground">Entrada {eur(PRICE)} · Los viernes, mayores de 65 a {eur(SENIOR_PRICE)}</p>}
