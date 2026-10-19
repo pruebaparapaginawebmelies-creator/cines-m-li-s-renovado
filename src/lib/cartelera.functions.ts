@@ -60,6 +60,7 @@ export const createBooking = createServerFn({ method: "POST" })
     }).select("id").single();
     if (error) throw new Error(error.message);
 
+    const code = booking.id.slice(0, 8).toUpperCase();
     const title = (show.movies as { title: string } | null)?.title ?? "Película";
     try {
       await sendGmail(
