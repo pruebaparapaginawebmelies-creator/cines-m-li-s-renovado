@@ -1,0 +1,3 @@
+CREATE POLICY "Admins upload posters" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'posters' AND public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins update posters" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'posters' AND public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins delete posters" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'posters' AND public.has_role(auth.uid(), 'admin'));

@@ -15,6 +15,13 @@
       "when": 1792355040953,
       "tag": "0001_bookings_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792420048716,
+      "tag": "0002_posters_policies",
+      "breakpoints": true
     }
   ]
 }
