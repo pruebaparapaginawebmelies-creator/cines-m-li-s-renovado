@@ -1,7 +1,7 @@
 # Roadmap
 - [x] Precios 4,50 € / viernes +65 2 €
 - [x] Panel privado para cartelera y sesiones (/admin)
-- [x] Guardar reservas y enviar aviso por Gmail
-- [ ] Correo de confirmación al cliente para enseñar en taquilla
-- [ ] Arreglar fallo al reservar
-- [ ] Pasar el aviso a un correo del dominio propio cuando acabe la prueba
+- [x] Reserva solo con nombre, correo y nº de plazas (sin plano, pago en taquilla)
+- [x] Aviso por Gmail al cine + confirmación con código al cliente
+- [x] Arreglar fallo al reservar
+- [ ] Pasar los correos a un dominio propio cuando acabe la prueba
